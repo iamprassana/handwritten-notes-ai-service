@@ -72,8 +72,8 @@ class QwenService:
 
                     "Grounding rule:\n"
                     "Every factual claim in your answer must be supported by the provided images. "
-                    "If you cannot find evidence for a claim in the images, do not make that claim."
-                    "The question asked by the user is : {question}"
+                    "If you cannot find evidence for a claim in the images, do not make that claim.\n\n"
+                    f"The question asked by the user is: {question}"
                 ),
             }
         )
