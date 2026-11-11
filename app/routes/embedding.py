@@ -37,9 +37,10 @@ async def generate_image_embedding(
             io.BytesIO(image_bytes)
         ).convert("RGB")
 
-        page = page_detection_service.detect_page(
-            pil_image
-        )
+        try:
+            page = page_detection_service.detect_page(pil_image)
+        finally:
+            page_detection_service.unload()
 
         processed = preprocess_handwritten_image(
             page

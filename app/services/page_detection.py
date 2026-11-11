@@ -11,14 +11,24 @@ class PageDetectionService:
     """Detect and crop the notebook page using YOLO segmentation."""
 
     def __init__(self, model_path: str):
-        if not Path(model_path).exists():
+        self.model_path = model_path
+        self.model = None
+
+    def _load(self) -> None:
+        if self.model is not None:
+            return
+        if not Path(self.model_path).exists():
             raise FileNotFoundError(
-                f"YOLO model not found: {model_path}"
+                f"YOLO model not found: {self.model_path}"
             )
 
-        self.model = YOLO(model_path)
+        self.model = YOLO(self.model_path)
+
+    def unload(self) -> None:
+        self.model = None
 
     def detect_page(self, image: Image.Image) -> Image.Image:
+        self._load()
         image_np = np.asarray(image)
 
         results = self.model.predict(
@@ -26,6 +36,7 @@ class PageDetectionService:
             imgsz=640,
             conf=0.5,
             verbose=False,
+            device="cpu",
         )
 
         if not results or results[0].masks is None:

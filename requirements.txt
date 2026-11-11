@@ -3,6 +3,8 @@ uvicorn[standard]
 python-multipart
 pydantic
 python-dotenv
+httpx
+supabase>=2.0,<3.0
 
 torch
 torchvision

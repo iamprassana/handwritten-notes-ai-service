@@ -3,6 +3,7 @@ from PIL import Image
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
 from app.services.config import settings
+from app.services.model_runtime import model_runtime
 
 
 class QwenService:
@@ -13,22 +14,36 @@ class QwenService:
         self.processor = None
 
     def load(self) -> None:
-        self.processor = AutoProcessor.from_pretrained(
+        if self.model is not None and self.processor is not None:
+            return
+
+        processor = AutoProcessor.from_pretrained(
             settings.qwen_model
         )
 
-        self.model = (
-            Qwen3VLForConditionalGeneration.from_pretrained(
-                settings.qwen_model,
-                torch_dtype="auto",
-                device_map="auto",
-            )
-            .eval()
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            settings.qwen_model,
+            torch_dtype="auto",
+            device_map="auto",
         )
+        self.processor = processor
+        self.model = model.eval()
 
         print("Qwen3-VL loaded.")
 
+    def unload(self) -> None:
+        self.model = None
+        self.processor = None
+
     def answer(
+        self,
+        images: list[Image.Image],
+        question: str,
+    ) -> str:
+        with model_runtime.use(self):
+            return self._answer(images, question)
+
+    def _answer(
         self,
         images: list[Image.Image],
         question: str,
