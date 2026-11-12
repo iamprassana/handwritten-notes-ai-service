@@ -31,15 +31,21 @@ def _positive_integer(name: str, fallback: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    colqwen_model: str = os.getenv(
-        "COLQWEN_MODEL",
-        "vidore/colqwen2-v1.0-hf",
-    )
+    jina_api_key: str = os.getenv("JINA_API_KEY", "").strip()
+    jina_embedding_model: str = os.getenv(
+        "JINA_EMBEDDING_MODEL",
+        "jina-embeddings-v4",
+    ).strip()
+    jina_base_url: str = os.getenv(
+        "JINA_BASE_URL",
+        "https://api.jina.ai/v1",
+    ).rstrip("/")
 
-    qwen_model: str = os.getenv(
-        "QWEN_MODEL",
-        "Qwen/Qwen3-VL-2B-Instruct",
-    )
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model: str = os.getenv(
+        "GEMINI_MODEL",
+        "gemini-3.8-flash",
+    ).strip()
 
     yolo_model_path: str = os.getenv(
         "YOLO_MODEL_PATH",
@@ -68,6 +74,9 @@ class Settings:
     qdrant_collection: str = os.getenv(
         "QDRANT_COLLECTION", "handwritten_pages"
     ).strip()
+    jina_qdrant_collection: str = os.getenv(
+        "JINA_QDRANT_COLLECTION", "handwritten_pages_jina"
+    ).strip()
     document_storage_dir: Path = Path(
         os.getenv(
             "DOCUMENT_STORAGE_DIR",
@@ -93,6 +102,8 @@ class Settings:
                 raise ValueError("QDRANT_URL must be a valid URL")
         if not self.qdrant_collection:
             raise ValueError("QDRANT_COLLECTION must not be empty")
+        if not self.jina_qdrant_collection:
+            raise ValueError("JINA_QDRANT_COLLECTION must not be empty")
 
 
 settings = Settings()

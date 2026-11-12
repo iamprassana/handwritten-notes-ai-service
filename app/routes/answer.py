@@ -3,7 +3,7 @@ import io
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from PIL import Image
 
-from app.services.qwen import qwen_service
+from app.services.gemini_service import gemini_service
 
 
 router = APIRouter(
@@ -23,7 +23,7 @@ async def answer_question(
         - only the images selected by Node.js retrieval
 
     FastAPI does not retrieve anything.
-    It simply passes those images to Qwen3-VL.
+    It simply passes those images to Gemini Flash.
     """
 
     try:
@@ -44,7 +44,7 @@ async def answer_question(
 
             pil_images.append(image)
 
-        answer = qwen_service.answer(
+        answer = gemini_service.answer(
             images=pil_images,
             question=question,
         )

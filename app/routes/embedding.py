@@ -26,7 +26,7 @@ async def generate_image_embedding(
         image
           -> YOLO
           -> preprocessing
-          -> ColQwen2
+      -> Jina Embeddings v4
           -> embedding response
     """
 
@@ -51,8 +51,8 @@ async def generate_image_embedding(
         )
 
         return {
-            "embedding": embedding.tolist(),
-            "shape": list(embedding.shape),
+            "embedding": embedding,
+            "shape": [len(embedding), len(embedding[0])],
         }
 
     except Exception as exc:
@@ -67,7 +67,7 @@ async def generate_question_embedding(
     request: QuestionEmbeddingRequest,
 ):
     """
-    Generate a ColQwen question multivector.
+    Generate a Jina Embeddings v4 question multivector.
     """
 
     try:
@@ -76,8 +76,8 @@ async def generate_question_embedding(
         )
 
         return {
-            "embedding": embedding.tolist(),
-            "shape": list(embedding.shape),
+            "embedding": embedding,
+            "shape": [len(embedding), len(embedding[0])],
         }
 
     except Exception as exc:

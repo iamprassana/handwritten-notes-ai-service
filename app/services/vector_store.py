@@ -10,9 +10,9 @@ from app.services.errors import ApiError
 
 
 class QdrantVectorStore:
-    """Persistent ColQwen2 multivector storage backed by Qdrant Cloud."""
+    """Persistent Jina Embeddings v4 multivector storage."""
 
-    _VECTOR_NAME = "colqwen2"
+    _VECTOR_NAME = "jina_v4"
 
     def __init__(self) -> None:
         if not settings.qdrant_url or not settings.qdrant_api_key:
@@ -23,7 +23,7 @@ class QdrantVectorStore:
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
         )
-        self.collection = settings.qdrant_collection
+        self.collection = settings.jina_qdrant_collection
         self._embedding_size: int | None = None
 
     def close(self) -> None:
@@ -57,20 +57,20 @@ class QdrantVectorStore:
         if not isinstance(vectors_config, dict):
             raise ApiError(
                 409,
-                "The Qdrant collection must use a named colqwen2 vector.",
+                "The Jina Qdrant collection must use a named jina_v4 vector.",
                 "VECTOR_COLLECTION_MISMATCH",
             )
         vector_config = vectors_config.get(self._VECTOR_NAME)
         if vector_config is None:
             raise ApiError(
                 409,
-                "The Qdrant collection is missing the colqwen2 vector.",
+                "The Jina Qdrant collection is missing the jina_v4 vector.",
                 "VECTOR_COLLECTION_MISMATCH",
             )
         if vector_config.size != embedding_size:
             raise ApiError(
                 409,
-                "The Qdrant collection dimension does not match ColQwen2.",
+                "The Qdrant collection dimension does not match Jina Embeddings v4.",
                 "VECTOR_COLLECTION_MISMATCH",
             )
         if vector_config.datatype != models.Datatype.FLOAT32:
@@ -87,7 +87,7 @@ class QdrantVectorStore:
         ):
             raise ApiError(
                 409,
-                "The Qdrant collection is not configured for ColQwen2 MAX_SIM multivectors.",
+                "The Qdrant collection is not configured for Jina MAX_SIM multivectors.",
                 "VECTOR_COLLECTION_MISMATCH",
             )
         for field_name, field_schema in (
@@ -112,15 +112,34 @@ class QdrantVectorStore:
     @staticmethod
     def _as_vector(embedding: Any) -> list[list[float]]:
         shape = getattr(embedding, "shape", None)
-        if shape is None or len(shape) != 2:
+        if shape is not None:
+            if len(shape) != 2:
+                raise ApiError(
+                    422,
+                    "Jina must return a two-dimensional multivector.",
+                    "INVALID_EMBEDDING",
+                )
+            vectors = embedding.tolist()
+        else:
+            vectors = embedding
+        if (
+            not isinstance(vectors, list)
+            or not vectors
+            or not all(isinstance(vector, list) for vector in vectors)
+            or not all(vector for vector in vectors)
+            or len({len(vector) for vector in vectors}) != 1
+        ):
             raise ApiError(
                 422,
-                "ColQwen2 must return a two-dimensional multivector.",
+                "Jina must return a two-dimensional multivector.",
                 "INVALID_EMBEDDING",
             )
-        vectors = embedding.tolist()
-        if not vectors or not vectors[0]:
-            raise ApiError(422, "ColQwen2 returned an empty embedding.", "INVALID_EMBEDDING")
+        if len(vectors[0]) != 128:
+            raise ApiError(
+                422,
+                "Jina returned a multivector with an unsupported dimension.",
+                "INVALID_EMBEDDING",
+            )
         return vectors
 
     def upsert_page(self, page_id: str, embedding: Any, payload: dict[str, Any]) -> None:
@@ -183,6 +202,31 @@ class QdrantVectorStore:
             )
         except Exception as exc:
             raise ApiError(502, "The indexed documents could not be listed.", "VECTOR_LIST_FAILED") from exc
+        return points
+
+    def scroll_legacy_pages(self, document_id: str) -> list[Any]:
+        """Read legacy ColQwen2 payloads without modifying the old collection."""
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=document_id),
+                )
+            ]
+        )
+        try:
+            points, _ = self.client.scroll(
+                collection_name=settings.qdrant_collection,
+                scroll_filter=query_filter,
+                with_payload=True,
+                limit=10000,
+            )
+        except Exception as exc:
+            raise ApiError(
+                502,
+                "The legacy document embeddings could not be read.",
+                "LEGACY_VECTOR_LIST_FAILED",
+            ) from exc
         return points
 
     def delete_document(self, document_id: str) -> None:

@@ -14,7 +14,6 @@ from app.routes.handwritten import router as handwritten_router
 from app.routes.documents import router as documents_router
 from app.services.config import settings
 from app.services.errors import ApiError
-from app.services.model_runtime import model_runtime
 import app.services.vector_store as vector_store_service
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,6 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        model_runtime.unload()
         if vector_store_service.vector_store is not None:
             vector_store_service.vector_store.close()
             vector_store_service.vector_store = None
@@ -39,7 +37,7 @@ app = FastAPI(
     title="Handwritten Notes API",
     description=(
         "Authenticated API for handwritten notes, account access, "
-        "ColQwen2 embeddings and Qwen3-VL answers."
+        "Jina Embeddings v4 and Gemini Flash answers."
     ),
     version="2.0.0",
     lifespan=lifespan,

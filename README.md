@@ -9,19 +9,20 @@ handwritten-notes processing route.
 - Supabase signup, login, logout, and current-user endpoints
 - Authenticated handwritten note processing with in-memory image uploads
 - YOLO page detection and OpenCV preprocessing for image embeddings
-- ColQwen2 image and question embeddings
-- Qwen3-VL grounded answer generation
-- Persistent ColQwen2 page embeddings in Qdrant Cloud
+- Jina Embeddings v4 image and question multivectors
+- Gemini Flash grounded answer generation
+- Persistent Jina page embeddings in Qdrant Cloud
 - Persistent processed page images in a configurable local directory
 
-Document indexing stores page-level ColQwen2 multivectors in Qdrant Cloud and
+Document indexing stores page-level Jina multivectors in the
+`handwritten_pages_jina` Qdrant collection and
 the corresponding processed PNGs under `DOCUMENT_STORAGE_DIR`. The Qdrant
 payload contains the image storage key, so retrieval remains available across
 requests and API restarts.
-Inference models load only when first needed. ColQwen2 and Qwen3-VL are swapped
-one at a time, and the YOLO page detector is loaded only for image-embedding
-requests and released afterward. This reduces idle and peak memory use; the
-first request for a model takes longer while it loads.
+Jina embeddings are generated through the cloud API. Gemini Flash is called
+remotely through the official `google-genai` SDK and no local Qwen3-VL weights
+are downloaded or loaded. The YOLO page detector is loaded only for image
+embedding requests and released afterward.
 
 ## Setup
 
@@ -41,7 +42,7 @@ pip install -r requirements-gpu.txt
 ```
 
 Copy `.env.example` to `.env` and set `FRONTEND_ORIGIN`, `SUPABASE_URL`,
-`QDRANT_URL`, `QDRANT_API_KEY`, and
+`QDRANT_URL`, `QDRANT_API_KEY`, `JINA_API_KEY`, and `GEMINI_API_KEY`, and
 `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`). Never use the Supabase
 service-role key as the publishable key. The service-role key is optional and
 only needed by the unused storage service.
@@ -70,12 +71,16 @@ python -m app.main
 | `SUPABASE_STORAGE_BUCKET` | No | `handwritten-files` | Storage service bucket |
 | `MAX_IMAGE_COUNT` | No | `5` | Maximum images per handwritten request |
 | `MAX_IMAGE_SIZE_BYTES` | No | `10485760` | Maximum bytes per image |
-| `COLQWEN_MODEL` | No | `vidore/colqwen2-v1.0-hf` | ColQwen2 model |
-| `QWEN_MODEL` | No | `Qwen/Qwen3-VL-2B-Instruct` | Qwen3-VL model |
+| `JINA_API_KEY` | Required for embeddings | — | Jina AI API key |
+| `JINA_EMBEDDING_MODEL` | No | `jina-embeddings-v4` | Jina embedding model |
+| `JINA_BASE_URL` | No | `https://api.jina.ai/v1` | Jina API base URL |
+| `GEMINI_API_KEY` | Required for answers | — | Google AI Studio API key |
+| `GEMINI_MODEL` | No | `gemini-3.8-flash` | Gemini answer-generation model |
 | `YOLO_MODEL_PATH` | No | `models/best.pt` | YOLO weights path |
 | `QDRANT_URL` | Required for document routes | — | Qdrant Cloud cluster URL |
 | `QDRANT_API_KEY` | Required for document routes | — | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | No | `handwritten_pages` | Persistent collection name |
+| `JINA_QDRANT_COLLECTION` | No | `handwritten_pages_jina` | Jina vector collection name |
 | `DOCUMENT_STORAGE_DIR` | No | `data/documents` | Persistent processed page image directory |
 
 `SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY` must be set.
@@ -112,6 +117,7 @@ The inference routes remain available:
 - `POST /api/documents/ask` — JSON search request; answers from retrieved pages only
 - `GET /api/documents` and `GET /api/documents/{document_id}` — indexed metadata
 - `GET /api/documents/{document_id}/pages` — page metadata
+- `POST /api/documents/{document_id}/reindex` — re-embed legacy page images into the Jina collection
 - `DELETE /api/documents/{document_id}` — delete embeddings and page images
 - `GET /health` — health check
 
@@ -127,26 +133,20 @@ curl -X POST http://localhost:3000/api/documents/search \
   -d '{"query":"What is the formula for kinetic energy?","top_k":5}'
 ```
 
-ColQwen2 returns a matrix of contextualized visual patch vectors. The API
+Jina Embeddings v4 returns a native matrix of visual/token vectors. The API
 stores that matrix as a Qdrant multivector and configures Qdrant's MAX_SIM
-comparator; it does not average or flatten the patches. The collection is
-created on first indexing and existing collection dimensions/configuration are
+comparator; it does not average or flatten the patches. The separate Jina
+collection is created on first indexing and its dimensions/configuration are
 validated before every write or query. Qdrant stores embeddings and metadata,
 while PNG page files remain outside Qdrant.
 
 ## Model setup
 
-ColQwen2 and Qwen3-VL load on first use and are not kept in memory together.
-On GPUs, Accelerate's automatic device mapping can split a model between GPU
-and CPU when GPU memory is limited. YOLO runs on CPU. The model implementations
-and dependency versions should match the validated notebook. The transformer
-models may download from Hugging Face on their first request; configure any
-required Hugging Face access before deploying.
+Jina Embeddings v4 and Gemini Flash run remotely; no local embedding or
+answer-generation transformer model is loaded. YOLO is loaded only during page
+detection and released afterward.
+Create the API key at
+`https://aistudio.google.com/apikey` and keep it only in `.env`.
 
-After installing the GPU requirements, confirm PyTorch detects the GPU with
-`python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"`.
-
-The models still need enough system RAM individually, plus room for inference
-activations. If the machine cannot fit either model by itself, unloading the
-other model will not be sufficient; use a machine with more available memory
-or a smaller model checkpoint.
+After installing the requirements, confirm the YOLO runtime can access the
+intended PyTorch installation.
