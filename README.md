@@ -11,10 +11,13 @@ handwritten-notes processing route.
 - YOLO page detection and OpenCV preprocessing for image embeddings
 - ColQwen2 image and question embeddings
 - Qwen3-VL grounded answer generation
-- A reusable Supabase Storage service for future storage routes
+- Persistent ColQwen2 page embeddings in Qdrant Cloud
+- Persistent processed page images in a configurable local directory
 
-The API does not currently expose database, Qdrant, or storage routes. Images
-uploaded for note processing are held in memory and are not persisted.
+Document indexing stores page-level ColQwen2 multivectors in Qdrant Cloud and
+the corresponding processed PNGs under `DOCUMENT_STORAGE_DIR`. The Qdrant
+payload contains the image storage key, so retrieval remains available across
+requests and API restarts.
 Inference models load only when first needed. ColQwen2 and Qwen3-VL are swapped
 one at a time, and the YOLO page detector is loaded only for image-embedding
 requests and released afterward. This reduces idle and peak memory use; the
@@ -37,7 +40,8 @@ instead:
 pip install -r requirements-gpu.txt
 ```
 
-Copy `.env.example` to `.env` and set `FRONTEND_ORIGIN`, `SUPABASE_URL`, and
+Copy `.env.example` to `.env` and set `FRONTEND_ORIGIN`, `SUPABASE_URL`,
+`QDRANT_URL`, `QDRANT_API_KEY`, and
 `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`). Never use the Supabase
 service-role key as the publishable key. The service-role key is optional and
 only needed by the unused storage service.
@@ -69,6 +73,10 @@ python -m app.main
 | `COLQWEN_MODEL` | No | `vidore/colqwen2-v1.0-hf` | ColQwen2 model |
 | `QWEN_MODEL` | No | `Qwen/Qwen3-VL-2B-Instruct` | Qwen3-VL model |
 | `YOLO_MODEL_PATH` | No | `models/best.pt` | YOLO weights path |
+| `QDRANT_URL` | Required for document routes | — | Qdrant Cloud cluster URL |
+| `QDRANT_API_KEY` | Required for document routes | — | Qdrant Cloud API key |
+| `QDRANT_COLLECTION` | No | `handwritten_pages` | Persistent collection name |
+| `DOCUMENT_STORAGE_DIR` | No | `data/documents` | Persistent processed page image directory |
 
 `SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY` must be set.
 
@@ -99,7 +107,32 @@ The inference routes remain available:
 - `POST /api/answer` — multipart `question` and repeated `images`
 - `POST /api/embeddings/image` — multipart `image`
 - `POST /api/embeddings/question` — JSON `{"question":"..."}`
+- `POST /api/documents/index` — multipart `document` and optional `notebook_id`
+- `POST /api/documents/search` — JSON `{"query":"...", "top_k":5}`
+- `POST /api/documents/ask` — JSON search request; answers from retrieved pages only
+- `GET /api/documents` and `GET /api/documents/{document_id}` — indexed metadata
+- `GET /api/documents/{document_id}/pages` — page metadata
+- `DELETE /api/documents/{document_id}` — delete embeddings and page images
 - `GET /health` — health check
+
+Example:
+
+```bash
+curl -X POST http://localhost:3000/api/documents/index \
+  -F "document=@notebook-page.jpg" \
+  -F "notebook_id=physics-notes"
+
+curl -X POST http://localhost:3000/api/documents/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is the formula for kinetic energy?","top_k":5}'
+```
+
+ColQwen2 returns a matrix of contextualized visual patch vectors. The API
+stores that matrix as a Qdrant multivector and configures Qdrant's MAX_SIM
+comparator; it does not average or flatten the patches. The collection is
+created on first indexing and existing collection dimensions/configuration are
+validated before every write or query. Qdrant stores embeddings and metadata,
+while PNG page files remain outside Qdrant.
 
 ## Model setup
 

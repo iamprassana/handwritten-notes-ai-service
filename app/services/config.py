@@ -63,6 +63,17 @@ class Settings:
     max_image_size_bytes: int = _positive_integer(
         "MAX_IMAGE_SIZE_BYTES", 10 * 1024 * 1024
     )
+    qdrant_url: str = os.getenv("QDRANT_URL", "").strip()
+    qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "").strip()
+    qdrant_collection: str = os.getenv(
+        "QDRANT_COLLECTION", "handwritten_pages"
+    ).strip()
+    document_storage_dir: Path = Path(
+        os.getenv(
+            "DOCUMENT_STORAGE_DIR",
+            str(PROJECT_ROOT / "data" / "documents"),
+        )
+    )
 
     def __post_init__(self) -> None:
         if not self.supabase_publishable_key:
@@ -76,6 +87,12 @@ class Settings:
             parsed = urlparse(value)
             if parsed.scheme not in ("http", "https") or not parsed.netloc:
                 raise ValueError(f"{name} must be a valid URL")
+        if self.qdrant_url:
+            parsed = urlparse(self.qdrant_url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError("QDRANT_URL must be a valid URL")
+        if not self.qdrant_collection:
+            raise ValueError("QDRANT_COLLECTION must not be empty")
 
 
 settings = Settings()

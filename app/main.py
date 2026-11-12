@@ -11,9 +11,11 @@ from app.routes.auth import router as auth_router
 from app.routes.answer import router as answer_router
 from app.routes.embedding import router as embedding_router
 from app.routes.handwritten import router as handwritten_router
+from app.routes.documents import router as documents_router
 from app.services.config import settings
 from app.services.errors import ApiError
 from app.services.model_runtime import model_runtime
+import app.services.vector_store as vector_store_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     logger.info("Starting Handwritten Notes API; inference models load on demand.")
+    if settings.qdrant_url and settings.qdrant_api_key:
+        vector_store_service.vector_store = vector_store_service.QdrantVectorStore()
     try:
         yield
     finally:
         model_runtime.unload()
+        if vector_store_service.vector_store is not None:
+            vector_store_service.vector_store.close()
+            vector_store_service.vector_store = None
         logger.info("Shut down Handwritten Notes API.")
 
 
@@ -41,7 +48,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -56,6 +63,7 @@ app.include_router(
 )
 app.include_router(auth_router, prefix="/api")
 app.include_router(handwritten_router, prefix="/api")
+app.include_router(documents_router, prefix="/api")
 
 
 @app.exception_handler(ApiError)

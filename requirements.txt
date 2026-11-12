@@ -16,3 +16,4 @@ opencv-python
 numpy
 ultralytics
 qwen-vl-utils
+qdrant-client>=1.14,<2.0
