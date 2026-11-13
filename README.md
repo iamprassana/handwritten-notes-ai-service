@@ -10,7 +10,7 @@ handwritten-notes processing route.
 - Authenticated handwritten note processing with in-memory image uploads
 - YOLO page detection and OpenCV preprocessing for image embeddings
 - Jina Embeddings v4 image and question multivectors
-- Gemini Flash grounded answer generation
+- Configurable Gemini or OpenRouter vision answer generation
 - Persistent Jina page embeddings in Qdrant Cloud
 - Persistent processed page images in a configurable local directory
 
@@ -19,10 +19,10 @@ Document indexing stores page-level Jina multivectors in the
 the corresponding processed PNGs under `DOCUMENT_STORAGE_DIR`. The Qdrant
 payload contains the image storage key, so retrieval remains available across
 requests and API restarts.
-Jina embeddings are generated through the cloud API. Gemini Flash is called
-remotely through the official `google-genai` SDK and no local Qwen3-VL weights
-are downloaded or loaded. The YOLO page detector is loaded only for image
-embedding requests and released afterward.
+Jina embeddings are generated through the cloud API. The selected answer
+provider is called remotely, and no local Qwen3-VL weights are downloaded or
+loaded. The YOLO page detector is loaded only for image embedding requests and
+released afterward.
 
 ## Setup
 
@@ -42,7 +42,8 @@ pip install -r requirements-gpu.txt
 ```
 
 Copy `.env.example` to `.env` and set `FRONTEND_ORIGIN`, `SUPABASE_URL`,
-`QDRANT_URL`, `QDRANT_API_KEY`, `JINA_API_KEY`, and `GEMINI_API_KEY`, and
+`QDRANT_URL`, `QDRANT_API_KEY`, and `JINA_API_KEY`, plus the credentials for
+the selected answer provider, and
 `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`). Never use the Supabase
 service-role key as the publishable key. The service-role key is optional and
 only needed by the unused storage service.
@@ -76,6 +77,12 @@ python -m app.main
 | `JINA_BASE_URL` | No | `https://api.jina.ai/v1` | Jina API base URL |
 | `GEMINI_API_KEY` | Required for answers | — | Google AI Studio API key |
 | `GEMINI_MODEL` | No | `gemini-3.8-flash` | Gemini answer-generation model |
+| `LLM_PROVIDER` | No | `gemini` | Answer provider: `gemini` or `openrouter` |
+| `OPENROUTER_API_KEY` | Required when selected | — | OpenRouter API key |
+| `OPENROUTER_MODEL` | No | `qwen/qwen3-vl-8b-instruct` | OpenRouter vision model |
+| `OPENROUTER_BASE_URL` | No | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `OPENROUTER_MAX_TOKENS` | No | `1024` | Maximum answer tokens |
+| `OPENROUTER_TEMPERATURE` | No | `0.2` | Answer sampling temperature |
 | `YOLO_MODEL_PATH` | No | `models/best.pt` | YOLO weights path |
 | `QDRANT_URL` | Required for document routes | — | Qdrant Cloud cluster URL |
 | `QDRANT_API_KEY` | Required for document routes | — | Qdrant Cloud API key |

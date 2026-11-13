@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException
 from app.services.auth import auth_service, extract_access_token
 from app.services.config import settings
 from app.services.errors import ApiError
-from app.services.gemini_service import gemini_service
+from app.services.answer_service import get_answer_service
 
 router = APIRouter(prefix="/handwritten", tags=["Handwritten Notes"])
 
@@ -112,5 +112,5 @@ async def process_handwritten_notes(
     finally:
         await form.close()
 
-    answer = gemini_service.answer(pil_images, question.strip())
+    answer = get_answer_service().answer(pil_images, question.strip())
     return {"answer": answer}

@@ -3,7 +3,8 @@ import io
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from PIL import Image
 
-from app.services.gemini_service import gemini_service
+from app.services.answer_service import get_answer_service
+from app.services.errors import ApiError
 
 
 router = APIRouter(
@@ -23,7 +24,7 @@ async def answer_question(
         - only the images selected by Node.js retrieval
 
     FastAPI does not retrieve anything.
-    It simply passes those images to Gemini Flash.
+    It simply passes those images to the configured answer provider.
     """
 
     try:
@@ -44,7 +45,7 @@ async def answer_question(
 
             pil_images.append(image)
 
-        answer = gemini_service.answer(
+        answer = get_answer_service().answer(
             images=pil_images,
             question=question,
         )
@@ -54,6 +55,9 @@ async def answer_question(
         }
 
     except HTTPException:
+        raise
+
+    except ApiError:
         raise
 
     except Exception as exc:

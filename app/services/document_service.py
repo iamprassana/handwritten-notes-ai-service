@@ -10,7 +10,7 @@ from PIL import Image, UnidentifiedImageError
 from app.services.document_storage import document_image_storage
 from app.services.embedding import embedding_service
 from app.services.errors import ApiError
-from app.services.gemini_service import gemini_service
+from app.services.answer_service import get_answer_service
 from app.services.page_detection import page_detection_service
 from app.services.pre_processing import preprocess_handwritten_image
 from app.services.vector_store import get_vector_store
@@ -121,7 +121,7 @@ class DocumentService:
                 "references": [],
             }
         return {
-            "answer": gemini_service.answer(images, query),
+            "answer": get_answer_service().answer(images, query),
             "references": [
                 {
                     "document_id": result["document_id"],

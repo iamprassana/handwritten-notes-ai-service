@@ -29,8 +29,23 @@ def _positive_integer(name: str, fallback: int) -> int:
     return parsed
 
 
+def _bounded_float(name: str, fallback: float, minimum: float, maximum: float) -> float:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return fallback
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number") from exc
+    if not minimum <= parsed <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return parsed
+
+
 @dataclass(frozen=True)
 class Settings:
+    llm_provider: str = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+
     jina_api_key: str = os.getenv("JINA_API_KEY", "").strip()
     jina_embedding_model: str = os.getenv(
         "JINA_EMBEDDING_MODEL",
@@ -46,6 +61,22 @@ class Settings:
         "GEMINI_MODEL",
         "gemini-3.8-flash",
     ).strip()
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "").strip()
+    openrouter_model: str = os.getenv(
+        "OPENROUTER_MODEL",
+        "qwen/qwen3-vl-8b-instruct",
+    ).strip()
+    openrouter_base_url: str = os.getenv(
+        "OPENROUTER_BASE_URL",
+        "https://openrouter.ai/api/v1",
+    ).rstrip("/")
+    openrouter_max_tokens: int = _positive_integer("OPENROUTER_MAX_TOKENS", 1024)
+    openrouter_temperature: float = _bounded_float(
+        "OPENROUTER_TEMPERATURE",
+        0.2,
+        0.0,
+        2.0,
+    )
 
     yolo_model_path: str = os.getenv(
         "YOLO_MODEL_PATH",
@@ -85,6 +116,8 @@ class Settings:
     )
 
     def __post_init__(self) -> None:
+        if self.llm_provider not in {"gemini", "openrouter"}:
+            raise ValueError("LLM_PROVIDER must be either gemini or openrouter")
         if not self.supabase_publishable_key:
             raise ValueError(
                 "Set SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY) in the environment"
@@ -104,6 +137,9 @@ class Settings:
             raise ValueError("QDRANT_COLLECTION must not be empty")
         if not self.jina_qdrant_collection:
             raise ValueError("JINA_QDRANT_COLLECTION must not be empty")
+        parsed = urlparse(self.openrouter_base_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError("OPENROUTER_BASE_URL must be a valid URL")
 
 
 settings = Settings()
