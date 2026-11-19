@@ -12,13 +12,12 @@ handwritten-notes processing route.
 - Jina Embeddings v4 image and question multivectors
 - Configurable Gemini or OpenRouter vision answer generation
 - Persistent Jina page embeddings in Qdrant Cloud
-- Persistent processed page images in a configurable local directory
+- Persistent processed page images in Supabase Storage
 
 Document indexing stores page-level Jina multivectors in the
-`handwritten_pages_jina` Qdrant collection and
-the corresponding processed PNGs under `DOCUMENT_STORAGE_DIR`. The Qdrant
-payload contains the image storage key, so retrieval remains available across
-requests and API restarts.
+`handwritten_pages_jina` Qdrant collection and the corresponding processed PNGs
+in the configured Supabase Storage bucket. The Qdrant payload contains the
+storage key, so retrieval remains available across requests and API restarts.
 Jina embeddings are generated through the cloud API. The selected answer
 provider is called remotely, and no local Qwen3-VL weights are downloaded or
 loaded. The YOLO page detector is loaded only for image embedding requests and
@@ -44,9 +43,9 @@ pip install -r requirements-gpu.txt
 Copy `.env.example` to `.env` and set `FRONTEND_ORIGIN`, `SUPABASE_URL`,
 `QDRANT_URL`, `QDRANT_API_KEY`, and `JINA_API_KEY`, plus the credentials for
 the selected answer provider, and
-`SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`). Never use the Supabase
-service-role key as the publishable key. The service-role key is optional and
-only needed by the unused storage service.
+`SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`), `SUPABASE_SERVICE_ROLE_KEY`,
+and `SUPABASE_STORAGE_BUCKET`. Never use the Supabase service-role key as the
+publishable key.
 
 Place the YOLO weights at `models/best.pt` or set `YOLO_MODEL_PATH`.
 
@@ -68,8 +67,8 @@ python -m app.main
 | `SUPABASE_URL` | Yes | — | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Yes* | — | Supabase public API key |
 | `SUPABASE_ANON_KEY` | Yes* | — | Legacy alternative to publishable key |
-| `SUPABASE_SERVICE_ROLE_KEY` | No | — | Only used by the storage service |
-| `SUPABASE_STORAGE_BUCKET` | No | `handwritten-files` | Storage service bucket |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes for document routes | — | Server-side Supabase Storage access |
+| `SUPABASE_STORAGE_BUCKET` | No | `handwritten-files` | Supabase Storage bucket for page images |
 | `MAX_IMAGE_COUNT` | No | `5` | Maximum images per handwritten request |
 | `MAX_IMAGE_SIZE_BYTES` | No | `10485760` | Maximum bytes per image |
 | `JINA_API_KEY` | Required for embeddings | — | Jina AI API key |
@@ -88,7 +87,6 @@ python -m app.main
 | `QDRANT_API_KEY` | Required for document routes | — | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | No | `handwritten_pages` | Persistent collection name |
 | `JINA_QDRANT_COLLECTION` | No | `handwritten_pages_jina` | Jina vector collection name |
-| `DOCUMENT_STORAGE_DIR` | No | `data/documents` | Persistent processed page image directory |
 
 `SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY` must be set.
 
@@ -124,6 +122,7 @@ The inference routes remain available:
 - `POST /api/documents/ask` — JSON search request; answers from retrieved pages only
 - `GET /api/documents` and `GET /api/documents/{document_id}` — indexed metadata
 - `GET /api/documents/{document_id}/pages` — page metadata
+- `GET /api/documents/{document_id}/pages/{page_id}/image` — stored page image
 - `POST /api/documents/{document_id}/reindex` — re-embed legacy page images into the Jina collection
 - `DELETE /api/documents/{document_id}` — delete embeddings and page images
 - `GET /health` — health check

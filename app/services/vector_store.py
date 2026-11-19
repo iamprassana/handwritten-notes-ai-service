@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from qdrant_client import QdrantClient
@@ -7,6 +8,8 @@ from qdrant_client.http import models
 
 from app.services.config import settings
 from app.services.errors import ApiError
+
+logger = logging.getLogger(__name__)
 
 
 class QdrantVectorStore:
@@ -158,6 +161,11 @@ class QdrantVectorStore:
                 wait=True,
             )
         except Exception as exc:
+            logger.exception(
+                "Qdrant upsert failed for page %s in collection %s.",
+                page_id,
+                self.collection,
+            )
             raise ApiError(502, "The page embedding could not be stored.", "VECTOR_UPSERT_FAILED") from exc
 
     def search(

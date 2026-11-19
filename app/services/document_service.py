@@ -118,10 +118,36 @@ class DocumentService:
         if not images:
             return {
                 "answer": "The requested information was not found in the indexed notes.",
+                "broad_subject": "Unknown",
+                "specific_topic": "Unknown",
+                "subject_confidence": 0.0,
+                "evidence_found": False,
+                "evidence": [],
                 "references": [],
             }
+        generated = get_answer_service().answer(images, query)
+        if isinstance(generated, str):
+            response: dict[str, Any] = {
+                "answer": generated,
+                "broad_subject": "Unknown",
+                "specific_topic": "Unknown",
+                "subject_confidence": 0.0,
+                "evidence_found": False,
+                "evidence": [],
+            }
+        else:
+            response = dict(generated)
+        for evidence in response.get("evidence", []):
+            page_index = evidence["page_index"]
+            if page_index < len(results):
+                result = results[page_index]
+                evidence.update({
+                    "document_id": result["document_id"],
+                    "page_id": result["page_id"],
+                    "page_number": result["page_number"],
+                })
         return {
-            "answer": get_answer_service().answer(images, query),
+            **response,
             "references": [
                 {
                     "document_id": result["document_id"],

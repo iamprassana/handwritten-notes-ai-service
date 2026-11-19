@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.services.document_service import document_service
@@ -80,6 +81,20 @@ async def get_document_pages(document_id: str) -> dict:
     if not points:
         raise ApiError(404, "The document was not found.", "DOCUMENT_NOT_FOUND")
     return {"pages": [point.payload or {} for point in points]}
+
+
+@router.get("/{document_id}/pages/{page_id}/image")
+async def get_document_page_image(document_id: str, page_id: str) -> Response:
+    key = f"documents/{document_id}/{page_id}.png"
+    try:
+        content = await run_in_threadpool(document_image_storage.read_bytes, key)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        raise ApiError(
+            404,
+            "The requested page image was not found.",
+            "PAGE_IMAGE_NOT_FOUND",
+        ) from exc
+    return Response(content=content, media_type="image/png")
 
 
 @router.post("/{document_id}/reindex")

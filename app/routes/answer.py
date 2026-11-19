@@ -45,14 +45,12 @@ async def answer_question(
 
             pil_images.append(image)
 
-        answer = get_answer_service().answer(
+        generated = get_answer_service().answer(
             images=pil_images,
             question=question,
         )
 
-        return {
-            "answer": answer,
-        }
+        return generated if isinstance(generated, dict) else {"answer": generated}
 
     except HTTPException:
         raise

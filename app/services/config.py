@@ -55,6 +55,10 @@ class Settings:
         "JINA_BASE_URL",
         "https://api.jina.ai/v1",
     ).rstrip("/")
+    jina_max_image_dimension: int = _positive_integer(
+        "JINA_MAX_IMAGE_DIMENSION",
+        2048,
+    )
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
     gemini_model: str = os.getenv(
@@ -108,13 +112,6 @@ class Settings:
     jina_qdrant_collection: str = os.getenv(
         "JINA_QDRANT_COLLECTION", "handwritten_pages_jina"
     ).strip()
-    document_storage_dir: Path = Path(
-        os.getenv(
-            "DOCUMENT_STORAGE_DIR",
-            str(PROJECT_ROOT / "data" / "documents"),
-        )
-    )
-
     def __post_init__(self) -> None:
         if self.llm_provider not in {"gemini", "openrouter"}:
             raise ValueError("LLM_PROVIDER must be either gemini or openrouter")

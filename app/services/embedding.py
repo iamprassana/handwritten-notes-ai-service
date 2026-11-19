@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import time
 from typing import Any
 
 import httpx
@@ -15,12 +16,20 @@ class JinaEmbeddingService:
     """Jina Embeddings v4 multimodal embedding service."""
 
     def __init__(self) -> None:
-        self._timeout = httpx.Timeout(60.0, connect=10.0)
+        self._timeout = httpx.Timeout(120.0, connect=10.0)
 
     def embed_image(self, image: Image.Image) -> list[list[float]]:
         try:
+            image = image.convert("RGB")
+            if max(image.size) > settings.jina_max_image_dimension:
+                scale = settings.jina_max_image_dimension / max(image.size)
+                resized = (
+                    max(1, round(image.width * scale)),
+                    max(1, round(image.height * scale)),
+                )
+                image = image.resize(resized, Image.Resampling.LANCZOS)
             buffer = io.BytesIO()
-            image.convert("RGB").save(buffer, format="PNG")
+            image.save(buffer, format="PNG")
         except (OSError, ValueError) as exc:
             raise ApiError(
                 422,
@@ -54,30 +63,47 @@ class JinaEmbeddingService:
             "embedding_type": "float",
             "return_multivector": True,
         }
-        try:
-            with httpx.Client(
-                base_url=settings.jina_base_url,
-                headers={
-                    "Authorization": f"Bearer {settings.jina_api_key}",
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
-                timeout=self._timeout,
-            ) as client:
-                response = client.post("/embeddings", json=payload)
-                response.raise_for_status()
-                body: Any = response.json()
-        except httpx.TimeoutException as exc:
-            raise ApiError(504, "The Jina embedding request timed out.", "JINA_TIMEOUT") from exc
-        except httpx.HTTPStatusError as exc:
-            status_code = exc.response.status_code
-            if status_code in (401, 403):
-                raise ApiError(502, "Jina rejected the API credentials.", "JINA_AUTH_FAILED") from exc
-            if status_code == 429:
-                raise ApiError(429, "The Jina embedding rate limit was reached.", "JINA_RATE_LIMITED") from exc
-            raise ApiError(502, "The Jina embedding request failed.", "JINA_PROVIDER_ERROR") from exc
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ApiError(502, "The Jina embedding service is unavailable.", "JINA_PROVIDER_ERROR") from exc
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(
+                    base_url=settings.jina_base_url,
+                    headers={
+                        "Authorization": f"Bearer {settings.jina_api_key}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=self._timeout,
+                ) as client:
+                    response = client.post("/embeddings", json=payload)
+                    response.raise_for_status()
+                    body: Any = response.json()
+                break
+            except httpx.TimeoutException as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                raise ApiError(
+                    504,
+                    "The Jina embedding request timed out.",
+                    "JINA_TIMEOUT",
+                ) from exc
+            except httpx.HTTPStatusError as exc:
+                status_code = exc.response.status_code
+                if status_code in (401, 403):
+                    raise ApiError(502, "Jina rejected the API credentials.", "JINA_AUTH_FAILED") from exc
+                if status_code == 429:
+                    raise ApiError(429, "The Jina embedding rate limit was reached.", "JINA_RATE_LIMITED") from exc
+                raise ApiError(502, "The Jina embedding request failed.", "JINA_PROVIDER_ERROR") from exc
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                raise ApiError(502, "The Jina embedding service is unavailable.", "JINA_PROVIDER_ERROR") from exc
+        else:
+            raise ApiError(502, "The Jina embedding service is unavailable.", "JINA_PROVIDER_ERROR") from last_error
 
         try:
             embedding = body["data"][0]["embeddings"]
